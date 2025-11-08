@@ -1,12 +1,12 @@
 const express = require('express')
 const cors = require('cors')
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 const port = process.env.PORT || 3000
 require('dotenv').config() 
 // Middleware 
 
-app.use(express())
+app.use(express.json())
 app.use(cors())
 // ---------------------------MongoDB Connection String
 
@@ -30,6 +30,29 @@ async function run() {
     
     await client.db("admin").command({ ping: 1 }); // Send a ping to confirm a successful connection
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
+    const moviedb = client.db('movie_master_pro');
+    const movies = moviedb.collection('movies');
+
+// -------------------- Get Api's
+
+    app.get('/movies', async (req, res)=>{   // get all movies
+        console.log('\n\n\n /movies was hit !!!!\n\n\n')
+        const movieData = await movies.find().toArray()
+
+        res.send(movieData)
+    })
+    app.get('/movies/:id', async (req, res)=>{ // get all movies by ID
+        const id = req.params;
+        const query = { _id : new ObjectId(id) }
+        console.log('\n\n\n /movies/id was hit !!!!\n\n\n')
+        const movieData = await movies.findOne(query)
+        res.send(movieData)
+    })
+
+
+
+
   } finally {
     
     
