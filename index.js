@@ -33,13 +33,28 @@ async function run() {
 
     const moviedb = client.db('movie_master_pro');
     const movies = moviedb.collection('movies');
+    const users = moviedb.collection('users');
 
 // -------------------- Get Api's
 
     app.get('/movies', async (req, res)=>{   // get all movies
         console.log('\n\n\n /movies was hit !!!!\n\n\n')
-        const movieData = await movies.find().toArray()
 
+        const sort = req.query.sort;
+
+        let movieData;
+
+        if(sort=='top_rated'){
+          movieData = await movies.find().sort({rating: -1}).limit(5).toArray()
+        }else if(sort=='latest'){
+          movieData = await movies.find().sort({ releaseYear: -1 }).limit(5).toArray()
+        }else if(sort=='movie_count'){
+          movieData = await movies.find().toArray()
+          movieData=movieData.length
+        }
+        else{
+          movieData = await movies.find().toArray()
+        }
         res.send(movieData)
     })
     app.get('/movies/:id', async (req, res)=>{ // get all movies by ID
@@ -48,6 +63,12 @@ async function run() {
         console.log('\n\n\n /movies/id was hit !!!!\n\n\n')
         const movieData = await movies.findOne(query)
         res.send(movieData)
+    })
+
+    app.get('/users_count', async (req, res)=>{ // get all movies by ID
+        console.log('\n\n\n /users_count was hit !!!!\n\n\n')
+        const usersData = await users.find().toArray()
+        res.send(usersData.length)
     })
 
 
