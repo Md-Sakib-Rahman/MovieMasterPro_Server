@@ -108,7 +108,16 @@ async function run() {
       const usersData = await users.find().toArray();
       res.send(usersData.length);
     });
+    app.get('/user', verifyToken, async (req, res) => {
+      const email = req.user.email;
+      if(!email){
+        return res.status(400).send({message: "email not found in header"})
+      }
 
+      const query = {email: email}
+      const result = await users.findOne(query)
+      res.send(result)
+    })
     // -------------------- Post Api's
     app.post("/users", verifyToken, async (req, res) => {
       console.log("/users was hit");
@@ -145,6 +154,26 @@ async function run() {
         const result = await users.updateOne(query, updateDoc)
         if(result.matchedCount === 0) return res.status(404).send({message: "user not found"})
         res.send({message: 'movie added to watchlist'})
+
+      }catch(err){
+        console.log(err)
+      }
+    })
+    // -------------------- Patch Api's
+    app.patch('/users/remove-from-watchlist', verifyToken, async (req, res) => {
+      const uid = req.user.uid;
+      const {movieId} = req.body;
+      if(!movieId){
+        res.status(400).send({ message: "movie id not found"})
+      }
+      const query = {uid: uid}
+      const updateDoc= {
+        $pull: {watchlist: movieId}
+      }
+      try{
+        const result = await users.updateOne(query, updateDoc)
+        if(result.matchedCount === 0) return res.status(404).send({message: "user not found"})
+        res.send({message: 'movie removed from watchlist'})
 
       }catch(err){
         console.log(err)
