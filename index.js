@@ -130,6 +130,26 @@ async function run() {
       const result = await users.insertOne(newUser);
       res.send(result);
     });
+
+    app.post('/users/add-to-watchlist', verifyToken, async (req, res) => {
+      const uid = req.user.uid;
+      const {movieId} = req.body;
+      if(!movieId){
+        res.status(400).send({ message: "movie id not found"})
+      }
+      const query = {uid: uid}
+      const updateDoc= {
+        $addToSet: {watchlist: movieId}
+      }
+      try{
+        const result = await users.updateOne(query, updateDoc)
+        if(result.matchedCount === 0) return res.status(404).send({message: "user not found"})
+        res.send({message: 'movie added to watchlist'})
+
+      }catch(err){
+        console.log(err)
+      }
+    })
   } finally {
   }
 }
