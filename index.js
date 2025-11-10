@@ -74,9 +74,13 @@ async function run() {
       console.log("\n\n\n /movies was hit !!!!\n\n\n");
 
       const sort = req.query.sort;
-
+      const email = req.query.email;
       let movieData;
-
+      if (email) {
+        const query = { addedBy: email };
+        const result = await movies.find(query).toArray();
+        return res.send(result);
+      }
       if (sort == "top_rated") {
         movieData = await movies.find().sort({ rating: -1 }).limit(5).toArray();
       } else if (sort == "latest") {
@@ -108,16 +112,16 @@ async function run() {
       const usersData = await users.find().toArray();
       res.send(usersData.length);
     });
-    app.get('/user', verifyToken, async (req, res) => {
+    app.get("/user", verifyToken, async (req, res) => {
       const email = req.user.email;
-      if(!email){
-        return res.status(400).send({message: "email not found in header"})
+      if (!email) {
+        return res.status(400).send({ message: "email not found in header" });
       }
 
-      const query = {email: email}
-      const result = await users.findOne(query)
-      res.send(result)
-    })
+      const query = { email: email };
+      const result = await users.findOne(query);
+      res.send(result);
+    });
     // -------------------- Post Api's
     app.post("/users", verifyToken, async (req, res) => {
       console.log("/users was hit");
@@ -134,55 +138,125 @@ async function run() {
         name: decodedUser.name,
         uid: decodedUser.uid,
         photoUrl: decodedUser.picture,
-        watchlist: watchlist || [], 
+        watchlist: watchlist || [],
       };
       const result = await users.insertOne(newUser);
       res.send(result);
     });
 
-    app.post('/users/add-to-watchlist', verifyToken, async (req, res) => {
+    app.post("/users/add-to-watchlist", verifyToken, async (req, res) => {
       const uid = req.user.uid;
-      const {movieId} = req.body;
-      if(!movieId){
-        res.status(400).send({ message: "movie id not found"})
+      const { movieId } = req.body;
+      if (!movieId) {
+        res.status(400).send({ message: "movie id not found" });
       }
-      const query = {uid: uid}
-      const updateDoc= {
-        $addToSet: {watchlist: movieId}
+      const query = { uid: uid };
+      const updateDoc = {
+        $addToSet: { watchlist: movieId },
+      };
+      try {
+        const result = await users.updateOne(query, updateDoc);
+        if (result.matchedCount === 0)
+          return res.status(404).send({ message: "user not found" });
+        res.send({ message: "movie added to watchlist" });
+      } catch (err) {
+        console.log(err);
       }
-      try{
-        const result = await users.updateOne(query, updateDoc)
-        if(result.matchedCount === 0) return res.status(404).send({message: "user not found"})
-        res.send({message: 'movie added to watchlist'})
+    });
+    app.post("/movies", verifyToken, async (req, res) => {
+      try {
+        const movieData = req.body;
+        const email = req.user.email;
+        const newMovie = {
+          ...movieData,
+          addedBy: email,
+        };
 
-      }catch(err){
-        console.log(err)
+        const result = await movies.insertOne(newMovie);
+        res.send(result);
+      } catch (error) {
+        console.error("Error posting new movie:", error);
+        res.status(500).send({ message: "Error adding movie" });
       }
-    })
+    });
     // -------------------- Patch Api's
-    app.patch('/users/remove-from-watchlist', verifyToken, async (req, res) => {
+    app.patch("/users/remove-from-watchlist", verifyToken, async (req, res) => {
       const uid = req.user.uid;
-      const {movieId} = req.body;
-      if(!movieId){
-        res.status(400).send({ message: "movie id not found"})
+      const { movieId } = req.body;
+      if (!movieId) {
+        res.status(400).send({ message: "movie id not found" });
       }
-      const query = {uid: uid}
-      const updateDoc= {
-        $pull: {watchlist: movieId}
+      const query = { uid: uid };
+      const updateDoc = {
+        $pull: { watchlist: movieId },
+      };
+      try {
+        const result = await users.updateOne(query, updateDoc);
+        if (result.matchedCount === 0)
+          return res.status(404).send({ message: "user not found" });
+        res.send({ message: "movie removed from watchlist" });
+      } catch (err) {
+        console.log(err);
       }
-      try{
-        const result = await users.updateOne(query, updateDoc)
-        if(result.matchedCount === 0) return res.status(404).send({message: "user not found"})
-        res.send({message: 'movie removed from watchlist'})
+    });
+    app.patch("/movies/:id", verifyToken, async (req, res) => {
+      const movieId = req.params.id;
+      const userEmail = req.user.email;
+      const updatedData = req.body; 
 
-      }catch(err){
-        console.log(err)
+      const query = { _id: new ObjectId(movieId) };
+
+      try {
+        const movie = await movies.findOne(query);
+
+        if (!movie) {
+          return res.status(404).send({ message: "Movie not found" });
+        }
+
+        if (movie.addedBy !== userEmail) {
+          return res
+            .status(403)
+            .send({ message: "Forbidden: You cannot edit this movie." });
+        }
+
+        const updateDoc = {
+          $set: updatedData,
+        };
+        const result = await movies.updateOne(query, updateDoc);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Error updating movie" });
       }
-    })
+    });
+    // -------------------- Delete Api's
+    app.delete("/movies/:id", verifyToken, async (req, res) => {
+      const movieId = req.params.id;
+      const userEmail = req.user.email;
+      const query = { _id: new ObjectId(movieId) };
+
+      try {
+        const movie = await movies.findOne(query);
+
+        if (!movie) {
+          return res.status(404).send({ message: "Movie not found" });
+        }
+        if (movie.addedBy !== userEmail) {
+          return res.status(403).send({
+            message: "unathorize access: You are not the owner of this movie.",
+          });
+        }
+        const result = await movies.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Error deleting movie" });
+      }
+    });
   } finally {
   }
 }
 run().catch(console.dir);
+
+// -------------------- Delete Api's
 
 // ---------------------------
 
