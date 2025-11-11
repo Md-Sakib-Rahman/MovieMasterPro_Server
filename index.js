@@ -75,9 +75,18 @@ async function run() {
 
       const sort = req.query.sort;
       const email = req.query.email;
+      const genre = req.query.genre;
+      const minRating = req.query.minRating;
       let movieData;
       if (email) {
         const query = { addedBy: email };
+        const result = await movies.find(query).toArray();
+        return res.send(result);
+      }
+      if(genre || minRating){
+        let query={}
+        if(genre)  query.genre = genre
+        if(minRating) query.rating = { $gte: parseFloat(minRating) };
         const result = await movies.find(query).toArray();
         return res.send(result);
       }
