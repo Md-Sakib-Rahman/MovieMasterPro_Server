@@ -154,7 +154,7 @@ async function run() {
     });
 
     app.post("/users/add-to-watchlist", verifyToken, async (req, res) => {
-      const uid = req.user.uid;
+      const uid = req.user.uid;      
       const { movieId } = req.body;
       if (!movieId) {
         res.status(400).send({ message: "movie id not found" });
@@ -191,6 +191,7 @@ async function run() {
     // -------------------- Patch Api's
     app.patch("/users/remove-from-watchlist", verifyToken, async (req, res) => {
       const uid = req.user.uid;
+      
       const { movieId } = req.body;
       if (!movieId) {
         res.status(400).send({ message: "movie id not found" });
