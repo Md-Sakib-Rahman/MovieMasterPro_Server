@@ -4,16 +4,25 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 3000;
 require("dotenv").config();
-// Middleware
+const admin = require("firebase-admin");
+
 
 app.use(express.json());
 app.use(cors());
-// ---------------------------MongoDB Connection String
 
+const decoded = Buffer.from(process.env.FIREBASE_SERVICE_KEY, "base64").toString(
+      "utf8"
+    );
+    const serviceAccount = JSON.parse(decoded);
+
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+// Initialize MongoDB
 const uri = process.env.MONGODB_URI;
-
 const client = new MongoClient(uri, {
-  // Create a MongoClient with a MongoClientOptions object to set the Stable API version
   serverApi: {
     version: ServerApiVersion.v1,
     strict: true,
@@ -21,53 +30,28 @@ const client = new MongoClient(uri, {
   },
 });
 
-async function run() {
+
+const moviedb = client.db("movie_master_pro");
+const movies = moviedb.collection("movies");
+const users = moviedb.collection("users");
+
+
+async function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "Unauthorized Access" });
+  }
+  const token = authHeader.split(" ")[1];
   try {
-    await client.connect(); // Connect the client to the server	(optional starting in v4.7)
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    return res.status(403).send({ message: "Unauthorized Access: Invalid token" });
+  }
+}
 
-    await client.db("admin").command({ ping: 1 }); // Send a ping to confirm a successful connection
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
 
-    const moviedb = client.db("movie_master_pro");
-    const movies = moviedb.collection("movies");
-    const users = moviedb.collection("users");
-
-    //-------------------- Firebase Admin
-
-    var admin = require("firebase-admin");
-
-    var serviceAccount = require("./movie-master-pro-49200-firebase-adminsdk.json");
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-
-    async function verifyToken(req, res, next) {
-      // Firebase Admin Middleware for token verification
-      const authHeader = req.headers.authorization;
-
-      if (!authHeader) {
-        return res
-          .status(401)
-          .send({ message: "Unauthorized Access: No token provided" });
-      }
-
-      const token = authHeader.split(" ")[1]; //
-
-      try {
-        const decodedToken = await admin.auth().verifyIdToken(token);
-        req.user = decodedToken;
-        next();
-      } catch (error) {
-        return res
-          .status(403)
-          .send({ message: "Unauthorized Access: Invalid token" });
-      }
-    }
-
-    // -------------------- Get Api's
 
     app.get("/movies", async (req, res) => {
       // get all movies
@@ -83,10 +67,10 @@ async function run() {
         const result = await movies.find(query).toArray();
         return res.send(result);
       }
-      if(genre || minRating){
-        let query={}
-        if(genre)  query.genre = genre
-        if(minRating) query.rating = { $gte: parseFloat(minRating) };
+      if (genre || minRating) {
+        let query = {};
+        if (genre) query.genre = genre;
+        if (minRating) query.rating = { $gte: parseFloat(minRating) };
         const result = await movies.find(query).toArray();
         return res.send(result);
       }
@@ -154,7 +138,7 @@ async function run() {
     });
 
     app.post("/users/add-to-watchlist", verifyToken, async (req, res) => {
-      const uid = req.user.uid;      
+      const uid = req.user.uid;
       const { movieId } = req.body;
       if (!movieId) {
         res.status(400).send({ message: "movie id not found" });
@@ -191,7 +175,6 @@ async function run() {
     // -------------------- Patch Api's
     app.patch("/users/remove-from-watchlist", verifyToken, async (req, res) => {
       const uid = req.user.uid;
-      
       const { movieId } = req.body;
       if (!movieId) {
         res.status(400).send({ message: "movie id not found" });
@@ -212,7 +195,7 @@ async function run() {
     app.patch("/movies/:id", verifyToken, async (req, res) => {
       const movieId = req.params.id;
       const userEmail = req.user.email;
-      const updatedData = req.body; 
+      const updatedData = req.body;
 
       const query = { _id: new ObjectId(movieId) };
 
@@ -261,17 +244,10 @@ async function run() {
         res.status(500).send({ message: "Error deleting movie" });
       }
     });
-  } finally {
-  }
-}
-run().catch(console.dir);
 
-// -------------------- Delete Api's
-
-// ---------------------------
 
 app.get("/", (req, res) => {
-  res.send("Hello World!");
+  res.send("Hello World! MovieMaster Pro server is running.");
 });
 
 app.listen(port, () => {
